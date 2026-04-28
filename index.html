@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>护理循环</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --text: #1f2329;
+      --muted: #7a8088;
+      --accent: #31b86a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
+
+    .app {
+      width: min(420px, 100%);
+      background: var(--card);
+      border-radius: 18px;
+      padding: 24px 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .main-btn {
+      width: 140px;
+      height: 140px;
+      border: none;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.25;
+      padding: 18px;
+      cursor: pointer;
+      transition: transform 0.12s ease;
+      animation: breathe 2.2s ease-in-out infinite;
+    }
+
+    .main-btn:active {
+      transform: scale(0.97);
+    }
+
+    @keyframes breathe {
+      0%,
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(49, 184, 106, 0.35);
+      }
+      50% {
+        transform: scale(1.04);
+        box-shadow: 0 0 0 12px rgba(49, 184, 106, 0);
+      }
+    }
+
+    .records {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid #eceef0;
+    }
+
+    .records li {
+      padding: 10px 2px;
+      border-bottom: 1px solid #eceef0;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .record-date {
+      color: rgba(174, 180, 188, 0.5);
+    }
+
+    .record-type {
+      color: #aeb4bc;
+    }
+
+    .reset-btn {
+      border: none;
+      background: transparent;
+      color: #b0b4ba;
+      font-size: 12px;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+
+    .actions {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      position: relative;
+    }
+
+    .toggle-btn,
+    .delete-btn {
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+
+    .toggle-btn {
+      color: #b0b4ba;
+      width: 28px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .delete-btn {
+      color: rgba(176, 180, 186, 0.5);
+    }
+
+    .actions-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .toggle-btn {
+      position: absolute;
+      left: 0;
+    }
+
+    .toggle-btn svg {
+      width: 16px;
+      height: 10px;
+      stroke: #b0b4ba;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-btn:not(.expanded) svg {
+      transform: rotate(180deg);
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <button id="nextBtn" class="main-btn" aria-label="记录本次护理"></button>
+    <ul id="records" class="records"></ul>
+    <div class="actions">
+      <button id="toggleBtn" class="toggle-btn" type="button" hidden aria-label="展开或收起记录">
+        <svg viewBox="0 0 16 10" aria-hidden="true">
+          <path d="M2 8 L8 2 L14 8"></path>
+        </svg>
+      </button>
+      <div class="actions-right">
+        <button id="resetBtn" class="reset-btn" type="button">从头开始</button>
+        <button id="deleteBtn" class="delete-btn" type="button">删除</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const cycle = [
+      "自然堂",
+      "无印良品",
+      "百雀羚",
+      "蓝芝",
+      "火山泥+自然堂",
+      "无印良品",
+      "百雀羚",
+      "蓝芝"
+    ];
+
+    const STORE_KEY = "hair-care-cycle-v1";
+    const DELETE_PASSWORD = "18823286062";
+    const COLLAPSED_COUNT = 8;
+    const recordsEl = document.getElementById("records");
+    const nextBtn = document.getElementById("nextBtn");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const deleteBtn = document.getElementById("deleteBtn");
+    let expanded = false;
+    let clearResultTimer = null;
+
+    const state = loadState();
+    render(state);
+
+    nextBtn.addEventListener("click", () => {
+      const careType = cycle[state.index];
+      const now = new Date();
+      const date = formatDate(now);
+
+      state.records.unshift({ date, careType });
+      state.index = (state.index + 1) % cycle.length;
+
+      saveState(state);
+      render(state, careType);
+
+      if (clearResultTimer) window.clearTimeout(clearResultTimer);
+      clearResultTimer = window.setTimeout(() => {
+        nextBtn.textContent = "";
+        clearResultTimer = null;
+      }, 30000);
+    });
+
+    resetBtn.addEventListener("click", () => {
+      state.index = 0;
+      saveState(state);
+      render(state);
+    });
+
+    toggleBtn.addEventListener("click", () => {
+      expanded = !expanded;
+      render(state, nextBtn.textContent);
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      const input = window.prompt("输入密码");
+      if (input !== DELETE_PASSWORD) return;
+      state.records = [];
+      saveState(state);
+      render(state);
+    });
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return { index: 0, records: [] };
+        const parsed = JSON.parse(raw);
+        return {
+          index: Number.isInteger(parsed.index) ? parsed.index % cycle.length : 0,
+          records: Array.isArray(parsed.records) ? parsed.records : []
+        };
+      } catch (_) {
+        return { index: 0, records: [] };
+      }
+    }
+
+    function saveState(current) {
+      localStorage.setItem(STORE_KEY, JSON.stringify(current));
+    }
+
+    function render(current, latestCareType = "") {
+      nextBtn.textContent = latestCareType;
+
+      const shouldCollapse = current.records.length > COLLAPSED_COUNT;
+      const visibleRecords = expanded || !shouldCollapse
+        ? current.records
+        : current.records.slice(0, COLLAPSED_COUNT);
+
+      toggleBtn.hidden = !shouldCollapse;
+      toggleBtn.classList.toggle("expanded", expanded);
+
+      recordsEl.innerHTML = visibleRecords
+        .map((item) => `<li><span class="record-date">${item.date}</span><span class="record-type">${item.careType}</span></li>`)
+        .join("");
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      const h = String(date.getHours()).padStart(2, "0");
+      const min = String(date.getMinutes()).padStart(2, "0");
+      return `${y}-${m}-${d} ${h}:${min}`;
+    }
+  </script>
+</body>
+</html>
