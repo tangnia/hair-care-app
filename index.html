@@ -316,7 +316,9 @@
     const deleteBtn = document.getElementById("deleteBtn");
 
     let lastLongPressAt = 0;
-    const LONG_PRESS_CLICK_GUARD_MS = 450;
+    const LONG_PRESS_CLICK_GUARD_MS = 1200;
+    let suppressClickAfterLongPress = false;
+    let suppressClearTimer = null;
     let lpTimer = null;
     let lpStartX = 0;
     let lpStartY = 0;
@@ -524,24 +526,38 @@
       return { cell, dateKey: dk };
     }
 
-    monthsRoot.addEventListener("click", (e) => {
-      if (Date.now() - lastLongPressAt < LONG_PRESS_CLICK_GUARD_MS) {
-        e.preventDefault();
-        return;
-      }
-      const hit = getCellFromTarget(e.target);
-      if (!hit) return;
-      if (!hit.cell.classList.contains("is-today")) return;
+    monthsRoot.addEventListener(
+      "click",
+      (e) => {
+        if (suppressClickAfterLongPress) {
+          suppressClickAfterLongPress = false;
+          if (suppressClearTimer) {
+            clearTimeout(suppressClearTimer);
+            suppressClearTimer = null;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (Date.now() - lastLongPressAt < LONG_PRESS_CLICK_GUARD_MS) {
+          e.preventDefault();
+          return;
+        }
+        const hit = getCellFromTarget(e.target);
+        if (!hit) return;
+        if (!hit.cell.classList.contains("is-today")) return;
 
-      if (itemByDateKey(state.items, hit.dateKey)) return;
+        if (itemByDateKey(state.items, hit.dateKey)) return;
 
-      const careType = cycle[state.index];
-      const stepIndex = state.index;
-      state.items.push({ dateKey: hit.dateKey, careType, stepIndex });
-      state.index = (state.index + 1) % cycle.length;
-      saveState(state);
-      render();
-    });
+        const careType = cycle[state.index];
+        const stepIndex = state.index;
+        state.items.push({ dateKey: hit.dateKey, careType, stepIndex });
+        state.index = (state.index + 1) % cycle.length;
+        saveState(state);
+        render();
+      },
+      true
+    );
 
     function cancelLongPressTimer() {
       if (lpTimer) {
@@ -568,6 +584,12 @@
             const rec = itemByDateKey(state.items, hit.dateKey);
             if (!rec) return;
             lastLongPressAt = Date.now();
+            suppressClickAfterLongPress = true;
+            if (suppressClearTimer) clearTimeout(suppressClearTimer);
+            suppressClearTimer = setTimeout(() => {
+              suppressClearTimer = null;
+              suppressClickAfterLongPress = false;
+            }, 700);
             state.items = removeItemByDateKey(state.items, hit.dateKey);
             state.index = rec.stepIndex;
             saveState(state);
