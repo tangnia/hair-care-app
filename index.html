@@ -2,14 +2,16 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f2f7">
   <title>护理循环</title>
   <style>
     :root {
-      --bg: #f7f7f8;
-      --card: #ffffff;
-      --text: #1f2329;
-      --muted: #7a8088;
+      --ios-bg: #f2f2f7;
+      --ios-label: #000000;
+      --ios-secondary: rgba(60, 60, 67, 0.6);
+      --ios-tertiary: rgba(60, 60, 67, 0.3);
+      --ios-today: #ff3b30;
       --accent: #31b86a;
     }
 
@@ -17,84 +19,246 @@
       box-sizing: border-box;
     }
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      padding: 20px;
+    html {
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
-    .app {
-      width: min(420px, 100%);
-      background: var(--card);
-      border-radius: 18px;
-      padding: 24px 18px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    body {
+      margin: 0;
+      min-height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+      background: var(--ios-bg);
+      color: var(--ios-label);
+      padding: calc(8px + env(safe-area-inset-top)) 0 calc(80px + env(safe-area-inset-bottom));
+      -webkit-tap-highlight-color: transparent;
+      touch-action: pan-y;
+    }
+
+    .shell {
+      max-width: 430px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    .month-block {
+      margin-bottom: 8px;
+    }
+
+    .cal-title {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      padding: 12px 4px 8px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--ios-bg);
+      padding-top: calc(12px + env(safe-area-inset-top));
+      margin-top: calc(-8px - env(safe-area-inset-top));
+    }
+
+    .month-block:first-child .cal-title {
+      margin-top: 0;
+      padding-top: 12px;
+    }
+
+    .cal-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ios-secondary);
+      padding: 0 0 6px;
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      gap: 2px 0;
+      padding-bottom: 8px;
+    }
+
+    .cal-cell {
+      min-height: 72px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
-    }
-
-    .main-btn {
-      width: 140px;
-      height: 140px;
-      border: none;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #fff;
-      font-size: 18px;
-      font-weight: 600;
-      line-height: 1.25;
-      padding: 18px;
+      justify-content: flex-start;
+      padding: 3px 2px 5px;
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--ios-label);
       cursor: pointer;
-      transition: transform 0.12s ease;
-      animation: breathe 2.2s ease-in-out infinite;
+      border-radius: 8px;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
-    .main-btn:active {
-      transform: scale(0.97);
+    .cal-cell:active {
+      background: rgba(0, 0, 0, 0.04);
     }
 
-    @keyframes breathe {
-      0%,
-      100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(49, 184, 106, 0.35);
-      }
-      50% {
-        transform: scale(1.04);
-        box-shadow: 0 0 0 12px rgba(49, 184, 106, 0);
-      }
+    /* 仅「今天」可点；其余日期仅展示 */
+    .cal-cell[data-datekey]:not(.is-today) {
+      pointer-events: none;
+      cursor: default;
     }
 
-    .records {
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      border-top: 1px solid #eceef0;
+    .cal-cell[data-datekey]:not(.is-today):active {
+      background: transparent;
     }
 
-    .records li {
-      padding: 10px 2px;
-      border-bottom: 1px solid #eceef0;
-      font-size: 14px;
+    .cal-cell--pad {
+      pointer-events: none;
+      min-height: 72px;
+      padding: 3px 2px 5px;
+      cursor: default;
+    }
+
+    /* 公历 + 农历叠放（间距参考系统日历：约 1px） */
+    .cal-day-bubble {
       display: flex;
-      justify-content: space-between;
-      gap: 12px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
 
-    .record-date {
-      color: rgba(174, 180, 188, 0.5);
+    .cal-day-bubble:not(.is-today) {
+      gap: 1px;
     }
 
-    .record-type {
-      color: #aeb4bc;
+    .cal-day-bubble:not(.is-today) .cal-day-num {
+      width: 32px;
+      height: auto;
+      min-height: 18px;
+      line-height: 1.05;
+      border-radius: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--ios-label);
+    }
+
+    .cal-lunar {
+      margin: 0;
+      font-size: 8px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      font-weight: 400;
+      color: rgba(60, 60, 67, 0.45);
+      text-align: center;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 今天：农历在红色圆内，与数字同为白色 */
+    .cal-day-bubble.is-today {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--ios-today);
+      box-sizing: border-box;
+      gap: 0;
+      padding: 0 2px;
+    }
+
+    .cal-day-bubble.is-today .cal-day-num {
+      width: auto;
+      height: auto;
+      min-height: 0;
+      line-height: 1;
+      border-radius: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .cal-day-bubble.is-today .cal-lunar {
+      margin-top: 1px;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 7px;
+      line-height: 1;
+    }
+
+    /* 仅法定节假日 */
+    .cal-fest-row {
+      margin-top: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-content: flex-start;
+      gap: 3px 4px;
+      max-width: 100%;
+    }
+
+    .cal-fest--legal {
+      font-size: 8px;
+      line-height: 1.15;
+      font-weight: 400;
+      color: rgba(0, 122, 255, 0.42);
+      text-align: center;
+      max-width: 100%;
+    }
+
+    .cal-badge {
+      display: inline-block;
+      margin-left: 2px;
+      padding: 0 3px;
+      font-size: 7px;
+      font-weight: 500;
+      line-height: 1.3;
+      border-radius: 2px;
+      vertical-align: 1px;
+    }
+
+    .cal-badge--off,
+    .cal-badge--work {
+      background: rgba(0, 122, 255, 0.1);
+      color: rgba(0, 122, 255, 0.48);
+    }
+
+    .cal-label {
+      margin-top: 3px;
+      width: 100%;
+      max-width: 100%;
+      font-size: 9px;
+      font-weight: 500;
+      line-height: 1.15;
+      color: var(--accent);
+      text-align: center;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-all;
+    }
+
+    .footer-actions {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 24px;
+      background: linear-gradient(to top, var(--ios-bg) 70%, transparent);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .footer-actions button {
+      pointer-events: auto;
     }
 
     .reset-btn {
@@ -102,84 +266,32 @@
       background: transparent;
       color: #b0b4ba;
       font-size: 12px;
-      padding: 2px 4px;
+      padding: 10px 6px;
       cursor: pointer;
     }
 
-    .actions {
-      width: 100%;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      position: relative;
-    }
-
-    .toggle-btn,
     .delete-btn {
       border: none;
       background: transparent;
-      font-size: 12px;
-      padding: 2px 4px;
-      cursor: pointer;
-    }
-
-    .toggle-btn {
-      color: #b0b4ba;
-      width: 28px;
-      height: 22px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .delete-btn {
       color: rgba(176, 180, 186, 0.5);
-    }
-
-    .actions-right {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-    }
-
-    .toggle-btn {
-      position: absolute;
-      left: 0;
-    }
-
-    .toggle-btn svg {
-      width: 16px;
-      height: 10px;
-      stroke: #b0b4ba;
-      stroke-width: 1.8;
-      fill: none;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      transition: transform 0.2s ease;
-    }
-
-    .toggle-btn:not(.expanded) svg {
-      transform: rotate(180deg);
+      font-size: 12px;
+      padding: 10px 6px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <main class="app">
-    <button id="nextBtn" class="main-btn" aria-label="记录本次护理"></button>
-    <ul id="records" class="records"></ul>
-    <div class="actions">
-      <button id="toggleBtn" class="toggle-btn" type="button" hidden aria-label="展开或收起记录">
-        <svg viewBox="0 0 16 10" aria-hidden="true">
-          <path d="M2 8 L8 2 L14 8"></path>
-        </svg>
-      </button>
-      <div class="actions-right">
-        <button id="resetBtn" class="reset-btn" type="button">从头开始</button>
-        <button id="deleteBtn" class="delete-btn" type="button">删除</button>
-      </div>
-    </div>
-  </main>
+  <div class="shell">
+    <div id="monthsRoot"></div>
+  </div>
 
+  <div class="footer-actions">
+    <button id="resetBtn" class="reset-btn" type="button">从头开始</button>
+    <button id="deleteBtn" class="delete-btn" type="button">删除</button>
+  </div>
+
+  <!-- 1.7.4 及更早内置放假数据不含 2026+；1.7.7 起含近年国务院安排 -->
+  <script src="https://cdn.jsdelivr.net/npm/lunar-javascript@1.7.7/lunar.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     const cycle = [
       "自然堂",
@@ -192,99 +304,314 @@
       "蓝芝"
     ];
 
-    const STORE_KEY = "hair-care-cycle-v1";
+    const STORE_KEY = "hair-care-cycle-v2";
+    const STORE_LEGACY = "hair-care-cycle-v1";
     const DELETE_PASSWORD = "18823286062";
-    const COLLAPSED_COUNT = 8;
-    const recordsEl = document.getElementById("records");
-    const nextBtn = document.getElementById("nextBtn");
-    const toggleBtn = document.getElementById("toggleBtn");
+
+    const MONTH_RANGE_PAST = 18;
+    const MONTH_RANGE_FUTURE = 12;
+
+    const monthsRoot = document.getElementById("monthsRoot");
     const resetBtn = document.getElementById("resetBtn");
     const deleteBtn = document.getElementById("deleteBtn");
-    let expanded = false;
-    let clearResultTimer = null;
+
+    let lastLongPressAt = 0;
+    const LONG_PRESS_CLICK_GUARD_MS = 450;
+    let lpTimer = null;
+    let lpStartX = 0;
+    let lpStartY = 0;
 
     const state = loadState();
-    render(state);
 
-    nextBtn.addEventListener("click", () => {
-      const careType = cycle[state.index];
-      const now = new Date();
-      const date = formatDate(now);
-
-      state.records.unshift({ date, careType });
-      state.index = (state.index + 1) % cycle.length;
-
-      saveState(state);
-      render(state, careType);
-
-      if (clearResultTimer) window.clearTimeout(clearResultTimer);
-      clearResultTimer = window.setTimeout(() => {
-        nextBtn.textContent = "";
-        clearResultTimer = null;
-      }, 30000);
-    });
-
-    resetBtn.addEventListener("click", () => {
-      state.index = 0;
-      saveState(state);
-      render(state);
-    });
-
-    toggleBtn.addEventListener("click", () => {
-      expanded = !expanded;
-      render(state, nextBtn.textContent);
-    });
-
-    deleteBtn.addEventListener("click", () => {
-      const input = window.prompt("输入密码");
-      if (input !== DELETE_PASSWORD) return;
-      state.records = [];
-      saveState(state);
-      render(state);
-    });
+    function emptyState() {
+      return { index: 0, items: [] };
+    }
 
     function loadState() {
       try {
         const raw = localStorage.getItem(STORE_KEY);
-        if (!raw) return { index: 0, records: [] };
-        const parsed = JSON.parse(raw);
-        return {
-          index: Number.isInteger(parsed.index) ? parsed.index % cycle.length : 0,
-          records: Array.isArray(parsed.records) ? parsed.records : []
-        };
-      } catch (_) {
-        return { index: 0, records: [] };
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return normalizeState(parsed);
+        }
+        const legacy = localStorage.getItem(STORE_LEGACY);
+        if (legacy) {
+          const migrated = migrateFromV1(JSON.parse(legacy));
+          saveState(migrated);
+          return migrated;
+        }
+      } catch (_) {}
+      return emptyState();
+    }
+
+    function normalizeState(parsed) {
+      const index = Number.isInteger(parsed.index) ? parsed.index % cycle.length : 0;
+      const items = Array.isArray(parsed.items)
+        ? parsed.items.filter((x) => x && x.dateKey && x.careType && Number.isInteger(x.stepIndex))
+        : [];
+      return { index, items };
+    }
+
+    function migrateFromV1(parsed) {
+      const records = Array.isArray(parsed.records) ? parsed.records : [];
+      const byDay = new Map();
+      for (const r of records) {
+        const dk = parseRecordDayKey(r.date);
+        if (!dk) continue;
+        const prev = byDay.get(dk);
+        if (!prev || String(r.date).localeCompare(prev.t) > 0) {
+          byDay.set(dk, { dateKey: dk, careType: r.careType, t: r.date });
+        }
       }
+      const sorted = [...byDay.values()].sort((a, b) => a.t.localeCompare(b.t));
+      const items = sorted.map((r, i) => ({
+        dateKey: r.dateKey,
+        careType: r.careType,
+        stepIndex: i % cycle.length
+      }));
+      const idx = Number.isInteger(parsed.index) ? parsed.index % cycle.length : items.length % cycle.length;
+      return { index: idx, items };
     }
 
     function saveState(current) {
       localStorage.setItem(STORE_KEY, JSON.stringify(current));
     }
 
-    function render(current, latestCareType = "") {
-      nextBtn.textContent = latestCareType;
-
-      const shouldCollapse = current.records.length > COLLAPSED_COUNT;
-      const visibleRecords = expanded || !shouldCollapse
-        ? current.records
-        : current.records.slice(0, COLLAPSED_COUNT);
-
-      toggleBtn.hidden = !shouldCollapse;
-      toggleBtn.classList.toggle("expanded", expanded);
-
-      recordsEl.innerHTML = visibleRecords
-        .map((item) => `<li><span class="record-date">${item.date}</span><span class="record-type">${item.careType}</span></li>`)
-        .join("");
+    function itemByDateKey(items, dateKey) {
+      return items.find((x) => x.dateKey === dateKey) || null;
     }
 
-    function formatDate(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, "0");
-      const d = String(date.getDate()).padStart(2, "0");
-      const h = String(date.getHours()).padStart(2, "0");
-      const min = String(date.getMinutes()).padStart(2, "0");
-      return `${y}-${m}-${d} ${h}:${min}`;
+    function removeItemByDateKey(items, dateKey) {
+      return items.filter((x) => x.dateKey !== dateKey);
     }
+
+    function parseRecordDayKey(dateStr) {
+      const part = String(dateStr).split(/\s/)[0];
+      const m = part.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    /** 农历 + 仅法定节假日（休/班）—— 数据来自 lunar-javascript */
+    /** @param m JS Date 月份 0–11，库接口要用公历 1–12 */
+    function buildDayCalendarExtras(y, m, d) {
+      const empty = { lunarHtml: "", festHtml: "" };
+      if (typeof Solar === "undefined" || typeof HolidayUtil === "undefined") return empty;
+      try {
+        const monthSolar = m + 1;
+        const solar = Solar.fromYmd(y, monthSolar, d);
+        const lunar = solar.getLunar();
+        const lunarText = lunar.getMonthInChinese() + lunar.getDayInChinese();
+        const lunarHtml = `<span class="cal-lunar">${escapeHtml(lunarText)}</span>`;
+
+        const hol = HolidayUtil.getHoliday(y, monthSolar, d);
+        if (!hol) {
+          return { lunarHtml, festHtml: "" };
+        }
+
+        const badge = hol.isWork() ? "班" : "休";
+        const badgeCls = hol.isWork() ? "cal-badge--work" : "cal-badge--off";
+        const festHtml = `<div class="cal-fest-row"><span class="cal-fest--legal">${escapeHtml(
+          hol.getName()
+        )}<span class="cal-badge ${badgeCls}">${badge}</span></span></div>`;
+
+        return { lunarHtml, festHtml };
+      } catch (_) {
+        return empty;
+      }
+    }
+
+    function buildMonthsRange() {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - MONTH_RANGE_PAST, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + MONTH_RANGE_FUTURE + 1, 0);
+      const list = [];
+      const cur = new Date(start);
+      while (cur <= end) {
+        list.push({ y: cur.getFullYear(), m: cur.getMonth() });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return list;
+    }
+
+    function renderMonthBlock(y, m, itemsMap, todayY, todayM, todayD) {
+      const first = new Date(y, m, 1);
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const startWeekday = first.getDay();
+      const leadPad = startWeekday;
+      const bodyCount = lastDay;
+      const tailPad = (7 - ((leadPad + bodyCount) % 7)) % 7;
+
+      const idAttr = y === todayY && m === todayM ? ` id="month-current"` : "";
+
+      const leadHtml = Array.from(
+        { length: leadPad },
+        () => '<div class="cal-cell cal-cell--pad" aria-hidden="true"></div>'
+      ).join("");
+
+      const daysHtml = [];
+      for (let d = 1; d <= lastDay; d++) {
+        const dateKey = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const rec = itemsMap.get(dateKey);
+        const isToday =
+          todayY === y && todayM === m && d === todayD;
+        const cls = ["cal-cell", rec ? "has-care" : "", isToday ? "is-today" : ""]
+          .filter(Boolean)
+          .join(" ");
+
+        const extra = buildDayCalendarExtras(y, m, d);
+
+        const labelHtml = rec
+          ? `<span class="cal-label">${escapeHtml(rec.careType)}</span>`
+          : `<span class="cal-label" aria-hidden="true"></span>`;
+
+        const bubbleCls = `cal-day-bubble${isToday ? " is-today" : ""}`;
+        daysHtml.push(
+          `<div class="${cls}" data-datekey="${dateKey}" data-has="${rec ? "1" : "0"}" role="button" tabindex="0"><div class="${bubbleCls}"><span class="cal-day-num">${d}</span>${extra.lunarHtml}</div>${extra.festHtml}${labelHtml}</div>`
+        );
+      }
+
+      const tailHtml = Array.from(
+        { length: tailPad },
+        () => '<div class="cal-cell cal-cell--pad" aria-hidden="true"></div>'
+      ).join("");
+
+      const gridHtml = leadHtml + daysHtml.join("") + tailHtml;
+
+      return `<section class="month-block"${idAttr} data-year="${y}" data-month="${m}">
+        <h2 class="cal-title">${y}年${m + 1}月</h2>
+        <div class="cal-weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="cal-grid">${gridHtml}</div>
+      </section>`;
+    }
+
+    function render() {
+      const itemsMap = new Map();
+      for (const it of state.items) {
+        itemsMap.set(it.dateKey, it);
+      }
+
+      const today = new Date();
+      const todayY = today.getFullYear();
+      const todayM = today.getMonth();
+      const todayD = today.getDate();
+
+      const parts = buildMonthsRange().map(({ y, m }) =>
+        renderMonthBlock(y, m, itemsMap, todayY, todayM, todayD)
+      );
+      monthsRoot.innerHTML = parts.join("");
+
+      requestAnimationFrame(() => {
+        const el = document.getElementById("month-current");
+        if (el) el.scrollIntoView({ block: "start", behavior: "auto" });
+      });
+    }
+
+    function getCellFromTarget(target) {
+      const cell = target.closest(".cal-cell");
+      if (!cell) return null;
+      const dk = cell.getAttribute("data-datekey");
+      if (!dk) return null;
+      return { cell, dateKey: dk };
+    }
+
+    monthsRoot.addEventListener("click", (e) => {
+      if (Date.now() - lastLongPressAt < LONG_PRESS_CLICK_GUARD_MS) {
+        e.preventDefault();
+        return;
+      }
+      const hit = getCellFromTarget(e.target);
+      if (!hit) return;
+      if (!hit.cell.classList.contains("is-today")) return;
+
+      if (itemByDateKey(state.items, hit.dateKey)) return;
+
+      const careType = cycle[state.index];
+      const stepIndex = state.index;
+      state.items.push({ dateKey: hit.dateKey, careType, stepIndex });
+      state.index = (state.index + 1) % cycle.length;
+      saveState(state);
+      render();
+    });
+
+    function cancelLongPressTimer() {
+      if (lpTimer) {
+        clearTimeout(lpTimer);
+        lpTimer = null;
+      }
+    }
+
+    function attachPointerHandlers() {
+      monthsRoot.addEventListener(
+        "pointerdown",
+        (e) => {
+          if (e.pointerType === "mouse" && e.button !== 0) return;
+          const hit = getCellFromTarget(e.target);
+          if (!hit) return;
+          if (!hit.cell.classList.contains("is-today")) return;
+          if (hit.cell.getAttribute("data-has") !== "1") return;
+
+          lpStartX = e.clientX;
+          lpStartY = e.clientY;
+          cancelLongPressTimer();
+          lpTimer = window.setTimeout(() => {
+            lpTimer = null;
+            const rec = itemByDateKey(state.items, hit.dateKey);
+            if (!rec) return;
+            lastLongPressAt = Date.now();
+            state.items = removeItemByDateKey(state.items, hit.dateKey);
+            state.index = rec.stepIndex;
+            saveState(state);
+            render();
+          }, 550);
+        },
+        true
+      );
+
+      function cancelIfMove(e) {
+        if (!lpTimer) return;
+        const dx = Math.abs(e.clientX - lpStartX);
+        const dy = Math.abs(e.clientY - lpStartY);
+        if (dx > 12 || dy > 12) cancelLongPressTimer();
+      }
+
+      monthsRoot.addEventListener("pointermove", cancelIfMove, true);
+      monthsRoot.addEventListener("pointerup", cancelLongPressTimer, true);
+      monthsRoot.addEventListener("pointercancel", cancelLongPressTimer, true);
+      monthsRoot.addEventListener("lostpointercapture", cancelLongPressTimer, true);
+    }
+
+    monthsRoot.addEventListener("contextmenu", (e) => {
+      if (getCellFromTarget(e.target)) e.preventDefault();
+    });
+
+    attachPointerHandlers();
+
+    resetBtn.addEventListener("click", () => {
+      state.index = 0;
+      saveState(state);
+      render();
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      const input = window.prompt("输入密码");
+      if (input !== DELETE_PASSWORD) return;
+      state.items = [];
+      state.index = 0;
+      saveState(state);
+      render();
+    });
+
+    render();
   </script>
 </body>
 </html>
