@@ -333,23 +333,23 @@
   <script src="https://cdn.jsdelivr.net/npm/lunar-javascript@1.7.7/lunar.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     const cycle = [
-      "自然",
+      "自然堂",
       "无印",
-      "百雀",
-      "蓝芝",
-      "火自",
+      "百雀羚",
+      "兰芝",
+      "火+自",
       "无印",
-      "百雀",
-      "蓝芝"
+      "百雀羚",
+      "兰芝"
     ];
 
     const STORE_KEY = "hair-care-cycle-v2";
     const STORE_LEGACY = "hair-care-cycle-v1";
     const DELETE_PASSWORD = "18823286062";
     const PRESET_HISTORY = [
-      { dateKey: "2026-04-22", careType: "自然", stepIndex: 0 },
+      { dateKey: "2026-04-22", careType: "自然堂", stepIndex: 0 },
       { dateKey: "2026-04-24", careType: "无印", stepIndex: 1 },
-      { dateKey: "2026-04-26", careType: "百雀", stepIndex: 2 }
+      { dateKey: "2026-04-26", careType: "百雀羚", stepIndex: 2 }
     ];
 
     const MONTH_RANGE_PAST = 18;
@@ -373,24 +373,55 @@
       return { index: 0, items: [] };
     }
 
+    /**
+     * 按日期先后把记录对齐到 cycle 的第 0、1、2… 步。
+     * 修正曾因 index 未同步导致的「同一天记成自然堂」等问题，并刷新 index。
+     */
+    function repairSequentialCycleFromDates(state) {
+      if (!state.items.length) {
+        return state.index === 0 ? state : { ...state, index: 0 };
+      }
+      const sorted = [...state.items].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      const repaired = sorted.map((it, i) => ({
+        ...it,
+        stepIndex: i % cycle.length,
+        careType: cycle[i % cycle.length]
+      }));
+      const nextIndex = repaired.length % cycle.length;
+      const byDate = new Map(state.items.map((x) => [x.dateKey, x]));
+      const unchanged =
+        state.index === nextIndex &&
+        repaired.every((it) => {
+          const o = byDate.get(it.dateKey);
+          return o && o.stepIndex === it.stepIndex && o.careType === it.careType;
+        });
+      return unchanged ? state : { ...state, items: repaired, index: nextIndex };
+    }
+
     function loadState() {
       try {
         const raw = localStorage.getItem(STORE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          const normalized = normalizeState(parsed);
-          const withPreset = applyPresetHistory(normalized);
-          if (withPreset !== normalized) saveState(withPreset);
-          return withPreset;
+          let s = normalizeState(parsed);
+          s = migrateCareTypeLabels(s);
+          s = applyPresetHistory(s);
+          s = repairSequentialCycleFromDates(s);
+          if (JSON.stringify(s) !== raw) saveState(s);
+          return s;
         }
         const legacy = localStorage.getItem(STORE_LEGACY);
         if (legacy) {
-          const migrated = applyPresetHistory(migrateFromV1(JSON.parse(legacy)));
+          let migrated = migrateFromV1(JSON.parse(legacy));
+          migrated = migrateCareTypeLabels(migrated);
+          migrated = applyPresetHistory(migrated);
+          migrated = repairSequentialCycleFromDates(migrated);
           saveState(migrated);
           return migrated;
         }
       } catch (_) {}
-      const initial = applyPresetHistory(emptyState());
+      let initial = applyPresetHistory(emptyState());
+      initial = repairSequentialCycleFromDates(initial);
       saveState(initial);
       return initial;
     }
@@ -401,6 +432,28 @@
         ? parsed.items.filter((x) => x && x.dateKey && x.careType && Number.isInteger(x.stepIndex))
         : [];
       return { index, items };
+    }
+
+    /** 旧版两字/长名称 → 当前 cycle 展示名（只改已存记录的 careType 文案） */
+    function migrateCareTypeLabels(current) {
+      const map = {
+        自然: "自然堂",
+        百雀: "百雀羚",
+        蓝芝: "兰芝",
+        火自: "火+自",
+        无印良品: "无印",
+        "火山泥+自然堂": "火+自"
+      };
+      let changed = false;
+      const items = current.items.map((it) => {
+        const next = map[it.careType];
+        if (next && next !== it.careType) {
+          changed = true;
+          return { ...it, careType: next };
+        }
+        return it;
+      });
+      return changed ? { ...current, items } : current;
     }
 
     function migrateFromV1(parsed) {
