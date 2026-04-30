@@ -358,6 +358,7 @@
     const SUPABASE_URL = "https://yjhruryippuddqatkibt.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_990BHVgXkZGTxQgOiWURAA_5ab6EZmT";
     const SUPABASE_TABLE = "hair_care_states";
+    const GLOBAL_STATE_ID = "global";
 
     const monthsRoot = document.getElementById("monthsRoot");
     const resetBtn = document.getElementById("resetBtn");
@@ -372,7 +373,6 @@
     let lpStartY = 0;
     let pushTimer = null;
     let supabaseClient = null;
-    let cloudUserId = null;
 
     const state = emptyState();
 
@@ -437,21 +437,8 @@
       try {
         if (!window.supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
         return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: { persistSession: true, autoRefreshToken: true }
+          auth: { persistSession: false, autoRefreshToken: false }
         });
-      } catch (_) {
-        return null;
-      }
-    }
-
-    async function ensureCloudUser() {
-      if (!supabaseClient) return null;
-      try {
-        const { data: current } = await supabaseClient.auth.getUser();
-        if (current && current.user && current.user.id) return current.user.id;
-        const { data, error } = await supabaseClient.auth.signInAnonymously();
-        if (error || !data || !data.user) return null;
-        return data.user.id;
       } catch (_) {
         return null;
       }
@@ -463,12 +450,12 @@
     }
 
     async function pullStateFromCloud(localState) {
-      if (!supabaseClient || !cloudUserId) return localState;
+      if (!supabaseClient) return localState;
       try {
         const { data, error } = await supabaseClient
           .from(SUPABASE_TABLE)
           .select("state_json")
-          .eq("user_id", cloudUserId)
+          .eq("id", GLOBAL_STATE_ID)
           .maybeSingle();
         if (error) return localState;
         if (!data || !data.state_json) {
@@ -487,15 +474,15 @@
     }
 
     async function pushStateToCloud(current) {
-      if (!supabaseClient || !cloudUserId) return;
+      if (!supabaseClient) return;
       try {
         await supabaseClient.from(SUPABASE_TABLE).upsert(
           {
-            user_id: cloudUserId,
+            id: GLOBAL_STATE_ID,
             state_json: current,
             updated_at: new Date().toISOString()
           },
-          { onConflict: "user_id" }
+          { onConflict: "id" }
         );
       } catch (_) {}
     }
@@ -834,7 +821,6 @@
     async function bootstrap() {
       const localState = loadState();
       supabaseClient = initSupabase();
-      cloudUserId = await ensureCloudUser();
       const finalState = await pullStateFromCloud(localState);
       applyState(finalState);
       localStorage.setItem(STORE_KEY, JSON.stringify(finalState));
